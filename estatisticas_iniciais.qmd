@@ -427,9 +427,9 @@ leaflet() |>
     weight = 1,
     label = ~ SBNM
   ) |>
-  addPolygons(
-    # add UCs
-  ) |>
+  # addPolygons(
+  #   # add UCs
+  # ) |>
   # add ameacas |> 
   addLayersControl(
     overlayGroups = c("Bacia do Alto Paraguai",

@@ -8,9 +8,8 @@
 find . -size +100M | cat >> .gitignore
 
 shapes/
-ENMTML_example/
-ENMTML_models/
-ENMTML_models_1k/
+ENMTML*/
+wc*/
 figuras/
-modelos/
-modelos.zip
+modelos*
+temp*
