@@ -25,6 +25,7 @@ library(terra)
 library(raster)
 library(readxl)
 library(patchwork)
+library(leaflet)
 
 grupos <- read_xlsx("planilhas/Ameaças_spp_pantanal_SALVE_26_05_2023.xlsx") |> 
   janitor::clean_names() |> 
@@ -387,6 +388,63 @@ knitr::include_graphics("figuras/riquezas/correlacoes_riq_alt.png")
 knitr::include_graphics("figuras/riquezas/riquezas_grupos.png")
 ```
 
+## Ameaças
+
+Add leaflet com todas pra marcar e desmarcar
+
+```{r}
+leaflet() |>
+  addProviderTiles(providers$Esri.WorldImagery) |>
+  # addRasterImage(
+  #   ras,
+  #   group = "Riqueza",
+  #   colors = pal
+  # ) |>
+  # addLegend(
+  #   pal = pal,
+  #   values = sort(unique(values(ras)))
+  # ) |>
+  addPolygons(
+    data = st_transform(bap, 4326),
+    group = "Bacia do Alto Paraguai",
+    color = "darkgray",
+    weight = 1,
+    fill = FALSE
+  ) |>
+  addPolygons(
+    data = municipios,
+    group = "Municipios",
+    color = "black",
+    weight = 1,
+    label =  ~ nm_mun,
+    
+  ) |>
+  addPolygons(
+    data = st_transform(subbacias, 4326),
+    group = "Sub-bacias",
+    color = "white",
+    fill = FALSE,
+    weight = 1,
+    label = ~ SBNM
+  ) |>
+  addPolygons(
+    # add UCs
+  ) |>
+  # add ameacas |> 
+  addLayersControl(
+    overlayGroups = c("Bacia do Alto Paraguai",
+                      "Municipios",
+                      "Sub-bacias",
+                      #UCs
+                      ),
+    options = layersControlOptions(collapsed = F, position = "bottomright")
+  ) |>
+  hideGroup(c("Municipios",
+              "Sub-bacias",
+              # UCs
+              ))
+
+```
 
 
 
