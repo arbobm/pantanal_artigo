@@ -316,7 +316,7 @@ spp_uc |>
 
 riqueza <- rast("ENMTML_models/riqueza.tif")
 riqueza_alb <- riqueza |> 
-  project(crs(bap_alb))
+  terra::project(crs(bap_alb))
 
 library(leaflet)
 library(raster)
@@ -390,59 +390,27 @@ knitr::include_graphics("figuras/riquezas/riquezas_grupos.png")
 
 ## Ameaças
 
-Add leaflet com todas pra marcar e desmarcar
+```{r}
+mapbiomas_ameacas <- rast("raster/ameacas_mapbiomas.tif")
+legendas_mapbiomas <- read_xlsx("planilhas/Legenda-Colecao-8-LEGEND-CODE.xlsx") |> 
+  janitor::clean_names()
+
+
+
+
+
+
+
+
+
+```
+
 
 ```{r}
-leaflet() |>
-  addProviderTiles(providers$Esri.WorldImagery) |>
-  # addRasterImage(
-  #   ras,
-  #   group = "Riqueza",
-  #   colors = pal
-  # ) |>
-  # addLegend(
-  #   pal = pal,
-  #   values = sort(unique(values(ras)))
-  # ) |>
-  addPolygons(
-    data = st_transform(bap, 4326),
-    group = "Bacia do Alto Paraguai",
-    color = "darkgray",
-    weight = 1,
-    fill = FALSE
-  ) |>
-  addPolygons(
-    data = municipios,
-    group = "Municipios",
-    color = "black",
-    weight = 1,
-    label =  ~ nm_mun,
-    
-  ) |>
-  addPolygons(
-    data = st_transform(subbacias, 4326),
-    group = "Sub-bacias",
-    color = "white",
-    fill = FALSE,
-    weight = 1,
-    label = ~ SBNM
-  ) |>
-  # addPolygons(
-  #   # add UCs
-  # ) |>
-  # add ameacas |> 
-  addLayersControl(
-    overlayGroups = c("Bacia do Alto Paraguai",
-                      "Municipios",
-                      "Sub-bacias"
-                      #UCs
-                      ),
-    options = layersControlOptions(collapsed = F, position = "bottomright")
-  ) |>
-  hideGroup(c("Municipios",
-              "Sub-bacias"
-              # UCs
-              ))
+
+plot(mapbiomas_ameacas)
+
+
 
 ```
 
