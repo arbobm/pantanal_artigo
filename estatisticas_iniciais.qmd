@@ -434,13 +434,13 @@ leaflet() |>
   addLayersControl(
     overlayGroups = c("Bacia do Alto Paraguai",
                       "Municipios",
-                      "Sub-bacias",
+                      "Sub-bacias"
                       #UCs
                       ),
     options = layersControlOptions(collapsed = F, position = "bottomright")
   ) |>
   hideGroup(c("Municipios",
-              "Sub-bacias",
+              "Sub-bacias"
               # UCs
               ))
 
