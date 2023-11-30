@@ -1,0 +1,392 @@
+---
+title: "Regiões do Pantanal"
+# author: 'Bruna, Lara, Flavia' 
+format: 
+  revealjs:
+    embed-resources: true
+---
+
+## Riqueza por estados
+
+```{r}
+
+#|echo: false
+#|message: false
+#|warning: false
+#|
+
+library(sf)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(forcats)
+library(paletteer)
+library(terra)
+library(raster)
+library(readxl)
+library(patchwork)
+
+grupos <- read_xlsx("planilhas/Ameaças_spp_pantanal_SALVE_26_05_2023.xlsx") |> 
+  janitor::clean_names() |> 
+  dplyr::select(nm_cntf = taxon, grupo_avaliado)
+
+ocorrencias_sf_alb <- read_sf("shapes/ocorrencias_sf_AlbBRs2k.shp")
+ocorrencias_sf_alb <- ocorrencias_sf_alb |> 
+  filter(!is.na(ctgr_vldd)) |> 
+  mutate(categoria_sigla = factor(
+    case_when(
+      str_detect(ctgr_vldd, "LC") ~ "LC",
+      str_detect(ctgr_vldd, "DD") ~ "DD",
+      str_detect(ctgr_vldd, "VU") ~ "VU",
+      str_detect(ctgr_vldd, "NT") ~ "NT"
+    ),
+    levels = c("LC", "DD", "NT", "VU")
+  )) |> 
+  left_join(grupos)
+
+bap <- read_sf("shapes/bacia_alto_paraguai/BAP_Brasil.shp")
+bap_alb <- bap |> 
+  st_transform(st_crs(ocorrencias_sf_alb))
+
+subbacias <- read_sf("shapes/AREASSUBBACDEPESCA/AREASSUBBACDEPESCA.shp")
+
+br <- read_sf("C:/Users/bruna/OneDrive/01_BaseSIG/Brasil/BR_UF_2022/BR_UF_2022.shp")
+
+
+estados_alb <- read_sf("shapes/BR_UF_2022_pantanal_alb.shp") |> 
+  janitor::clean_names()
+
+spp_estados <- ocorrencias_sf_alb |> 
+  st_join(estados_alb) |> 
+  filter(!is.na(sigla_uf)) |> 
+  as_tibble() |>
+  distinct(nm_cntf, categoria_sigla, classe, .keep_all = TRUE) |> 
+  count(sigla_uf, classe, categoria_sigla, sort = TRUE)
+
+plotly::ggplotly(
+  spp_estados |> 
+    ggplot(aes(x = sigla_uf, y = n, fill = fct_rev(categoria_sigla))) +
+    geom_col(width = 0.4) +
+    scale_fill_manual(values = c("#FFC451", "#93C769", "#d1d1c7","#609C8F"),
+                      # labels = c("VU" = "Vulnerável", "NT" = "Quase ameaçada",
+                      #            "DD" = "Dados insuficientes", 
+                      #            "LC" = "Pouco preocupante"),
+                      name = "Risco de extinção") +
+    labs(x = "Estados", y = "Número de espécies") +
+    facet_wrap(~classe) +
+    theme_bw() +
+    theme(
+      # axis.text.x = element_text(angle = 90),
+      legend.position = "bottom"
+    )
+)
+```
+
+## Numero de espécies por categoria por bacia
+
+```{r}
+
+subbacias_alb <- subbacias |> 
+  st_transform(st_crs(ocorrencias_sf_alb)) |> 
+  janitor::clean_names()
+
+spp_bacias <- ocorrencias_sf_alb |> 
+  dplyr::select(classe:familia, nm_cntf, 
+         lat = latitud, lon = longitd, endmc_b, categoria_sigla, grupo_avaliado) |> 
+  st_join(dplyr::select(subbacias_alb, sbnm)) |> 
+  filter(!is.na(sbnm)) |> 
+  filter(!is.na(categoria_sigla)) 
+
+
+n_categorias_bacia <- spp_bacias |>
+  distinct(classe, nm_cntf, categoria_sigla, .keep_all = TRUE) |> 
+  count(sbnm, grupo_avaliado, categoria_sigla) |> 
+  arrange(sbnm) 
+
+bacias_ordem <- n_categorias_bacia |> 
+  count(sbnm, sort = TRUE) |>
+  as_tibble() |> 
+  dplyr::select(-geometry) |> 
+  left_join(
+    n_categorias_bacia |> 
+      group_by(sbnm) |> 
+      summarise(n2 = sum(n)) 
+  ) |> 
+  arrange(
+    -n,
+    -n2) |> 
+  pull(sbnm) |> 
+  str_remove_all("SB ")
+
+# n_categorias_bacia |>
+#   mutate(sbnm = factor(sbnm, levels = bacias_ordem)) |> 
+#   ggplot(aes(x = categoria_sigla, y = n)) +
+#   # aes(x = fct_rev(categoria_sigla), y = n) +
+#   # coord_flip() +
+#   geom_col() +
+#   labs(y = "Número de espécies", x = "Risco de extinção") +
+#   facet_wrap(~sbnm, 
+#              scales = "free_x"
+#              )
+plotly::ggplotly(
+  n_categorias_bacia |>
+    mutate(sbnm = str_remove_all(n_categorias_bacia$sbnm, "SB ")) |> 
+    mutate(sbnm = factor(sbnm, levels = bacias_ordem)) |> 
+    ggplot(aes(x = sbnm, y = n, fill = fct_rev(categoria_sigla))) +
+    geom_col() +
+    labs(x = "Sub-bacia", y = "Número de espécies", fill = "Risco de extinção") +
+    scale_fill_manual(values = c("#FFC451", "#93C769", "#d1d1c7","#609C8F")) +
+    facet_wrap(~grupo_avaliado) +
+    theme_bw() +
+    theme(
+      axis.text.x = element_text(angle = 90, vjust = 0.5),
+      legend.position = "bottom",
+    )
+)
+
+x <- n_categorias_bacia |> 
+  as_tibble() |> 
+  mutate(sbnm = factor(sbnm),
+         grupo_avaliado = factor(grupo_avaliado)) |>
+  dplyr::group_by(sbnm, grupo_avaliado, .drop = FALSE) |> 
+  dplyr::summarise(n = sum(n))
+bacias_nspp <- subbacias_alb |> 
+  right_join(x) 
+```
+
+## Numero de espécies por bacia
+
+```{r}
+
+grupos <- bacias_nspp |> 
+  mutate(grupo_avaliado = word(grupo_avaliado)) |> 
+  pull(grupo_avaliado) |> 
+  unique()
+graf <- list()
+for (i in 1:length(grupos)) {
+
+  graf[[i]] <- bacias_nspp |> 
+    mutate(grupo_avaliado = word(grupo_avaliado)) |> 
+    dplyr::filter(grupo_avaliado == grupos[i]) |> 
+    ggplot() +
+    geom_sf(aes(fill = n)) +
+    geom_sf_text(aes(label = n), color = "white") +
+    # ggrepel::geom_text_repel(aes(label = sbnm, geometry = geometry),
+    #                          stat = "sf_coordinates", min.segment.length = 10) +
+    labs(
+      # title = "Riqueza por sub-bacia", 
+      subtitle = grupos[i]
+      # fill = grupos[i]
+      ) +
+    # facet_wrap(~grupo_avaliado) +
+    scale_fill_paletteer_c("ggthemes::Brown", direction = 1) +
+    # scale_fill_paletteer_c("ggthemes::Red-Black Diverging", direction = -1) +
+    theme_bw() +
+    theme(
+      # axis.text.y = element_text(angle = 90,
+      #                                hjust = 0.5),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      legend.position = "none")
+}
+
+(graf[[1]] + graf[[2]] + graf[[3]]) / (graf[[4]] + graf[[5]] + graf[[6]]) 
+```
+
+## Riqueza por município
+
+```{r}
+municipios <- read_sf("C:/Users/bruna/OneDrive/01_BaseSIG/Brasil/BR_Municipios_2022/BR_Municipios_2022.shp") |> 
+  janitor::clean_names()
+
+municipios_alb <- municipios |> 
+  st_transform(st_crs(ocorrencias_sf_alb)) |> 
+  st_filter(bap_alb)
+
+
+n_spp_muni <- municipios_alb |> 
+  st_join(ocorrencias_sf_alb) |> 
+  as_tibble() |> 
+  distinct(nm_cntf, nm_mun, grupo_avaliado) |> 
+  mutate(nm_mun = factor(nm_mun),
+         grupo_avaliado = factor(grupo_avaliado)) |> 
+  count(nm_mun, grupo_avaliado, sort = TRUE, .drop = FALSE)
+
+# n_spp_muni |> 
+#   filter(is.na(classe))
+
+
+graficos_list <- list()
+
+for (i in 1:length(grupos)) {
+  
+  graficos_list[[i]] <- municipios_alb |>
+    right_join(n_spp_muni) |>
+    mutate(grupo_avaliado = word(grupo_avaliado)) |> 
+    filter(grupo_avaliado == grupos[i]) |> 
+    ggplot() +
+    geom_sf(aes(fill = n)) +
+    scale_fill_paletteer_binned(palette = "ggthemes::Red") +
+    # scale_fill_paletteer_c(
+    #   "ggthemes::Brown", direction = 1,
+    #   # "ggthemes::Red-Black Diverging", direction = -1,
+    #   breaks = c(0, 50, 100, 141),
+    #   limits = c(0, max(n_spp_muni$n)),
+    #   name = "Riqueza de espécies") +
+    labs(fill = grupos[i])+
+    theme_bw() +
+    theme(
+      axis.text = element_blank(),
+      axis.ticks = element_blank()
+      # axis.text.y = element_text(angle = 90,
+      #                            hjust = 0.5)
+      
+    )
+  
+}
+
+(graficos_list[[1]] + graficos_list[[2]] + graficos_list[[3]]) /
+  (graficos_list[[4]] + graficos_list[[5]] + graficos_list[[6]]) +
+  plot_annotation(title = "Riqueza por municipios")
+
+
+
+```
+
+## Riqueza por Unidade de Conservação
+
+```{r}
+ucs_alb <- read_sf("shapes/ucs_juntas_alb.shp")
+
+n_spp_ucs <- ocorrencias_sf_alb |> 
+  st_join(ucs_alb) |> 
+  as_tibble() |> 
+  filter(!is.na(nome_abrev)) |> 
+  distinct(classe, nm_cntf, categoria_sigla, nome_abrev) |> 
+  count(classe, nome_abrev, sort = TRUE)
+
+ucs_mais_spp <- ucs_alb |> 
+  left_join(n_spp_ucs) |> 
+  filter(n > 40 & n < 70)
+
+ucs_alb |>
+  left_join(n_spp_ucs) |> 
+  filter(!is.na(classe)) |> 
+  ggplot() +
+  geom_sf(data = subbacias_alb) +
+  geom_sf(aes(fill = n)) +
+  # geom_sf_text(data = ucs_mais_spp, aes(label = nome_abrev)) +
+  scale_fill_paletteer_c("ggthemes::Brown", direction = 1, name = "Número de espécies") +
+  # scale_fill_paletteer_c("ggthemes::Red-Black Diverging", direction = -1, name = "Número de espécies") +
+  labs(caption = paste(ucs_mais_spp$nome_abrev, collapse = "\n")) +
+  facet_wrap(~classe) +
+  theme_bw() +
+  theme(axis.text.y = element_text(angle = 90,
+                                   hjust = 0.5))
+
+```
+
+## Quais UCs tem espécies ameaçadas?
+
+```{r}
+
+spp_uc <- ocorrencias_sf_alb |> 
+  filter(categoria_sigla != "LC") |> 
+  st_join(ucs_alb) |> 
+  filter(!is.na(nome_abrev))
+
+spp_uc |> 
+  ggplot() +
+  geom_sf(color = "red") +
+  geom_sf(data = ucs_alb, fill = NA) +
+  geom_sf(data = bap_alb, fill = NA) +
+  labs(caption = paste(spp_uc$localdd, paste0(spp_uc$nm_cntf, " (Lagarto)"), sep = " \n")) +
+  theme_bw() +
+  theme(axis.text.y = element_text(angle = 90,
+                                   hjust = 0.5))
+
+```
+
+## Riqueza com modelos
+<!-- separar por répteis e anfíbios e colocar um ao lado do outro -->
+
+```{r}
+
+riqueza <- rast("ENMTML_models/riqueza.tif")
+riqueza_alb <- riqueza |> 
+  project(crs(bap_alb))
+
+library(leaflet)
+library(raster)
+municipios <- st_transform(municipios_alb, 4326)
+ras <- raster(riqueza)
+pal <- colorNumeric(
+  palette = "Reds",
+  domain = 0:255, na.color = "transparent")
+
+leaflet() |> 
+  addProviderTiles(providers$Esri.WorldImagery) |> 
+  addRasterImage(
+    ras,
+    group = "Riqueza",
+    colors = pal
+  ) |> 
+  addLegend(
+    pal = pal,
+    values = sort(unique(values(ras)))
+  ) |> 
+  addPolygons(
+    data = st_transform(bap, 4326),
+    group = "Bacia do Alto Paraguai",
+    color = "darkgray",
+    weight = 1,
+    fill = FALSE
+  ) |> 
+  addPolygons(
+    data = municipios,
+    group = "Municipios",
+    color = "black",
+    weight = 1,
+    label =  ~nm_mun,
+    
+  ) |> 
+  addPolygons(
+    data = st_transform(subbacias, 4326),
+    group = "Sub-bacias",
+    color = "white",
+    fill = FALSE,
+    weight = 1,
+    label = ~SBNM
+  ) |> 
+  addLayersControl(
+    overlayGroups = c("Riqueza",
+                      "Bacia do Alto Paraguai",
+                      "Municipios",
+                      "Sub-bacias"),
+    options = layersControlOptions(collapsed = F, position = "bottomright")) |> 
+  hideGroup(c(       "Bacia do Alto Paraguai",
+                     "Municipios",
+                     "Sub-bacias")
+            
+  )
+
+
+
+```
+
+## Riqueza com modelos por grupos
+
+```{r}
+knitr::include_graphics("figuras/riquezas/correlacoes_riq_alt.png")
+```
+
+## Riqueza com modelos por grupos
+
+```{r}
+knitr::include_graphics("figuras/riquezas/riquezas_grupos.png")
+```
+
+
+
+
